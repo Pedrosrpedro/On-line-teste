@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema Online Simples (Servidor/Cliente)</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: space-around; }
+        .container { width: 45%; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        h2, h3 { text-align: center; }
+        textarea { width: 100%; min-height: 100px; margin-bottom: 10px; }
+        button { width: 100%; padding: 10px; margin-bottom: 10px; }
+        .console { background-color: #f0f0f0; border: 1px solid #ddd; height: 200px; overflow-y: scroll; padding: 5px; font-size: 0.9em; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Servidor (Cria a Partida)</h2>
+        <button id="createServerBtn">Criar Partida (Servidor)</button>
+
+        <div id="server-offer-section" class="hidden">
+            <h3>1. Envie esta Oferta para o Cliente:</h3>
+            <textarea id="offerSdp" readonly></textarea>
+        </div>
+
+        <div id="server-answer-section" class="hidden">
+            <h3>2. Cole a Resposta do Cliente aqui:</h3>
+            <textarea id="answerSdp"></textarea>
+            <button id="connectServerBtn">Confirmar Resposta do Cliente</button>
+        </div>
+
+        <div class="communication-section hidden">
+            <h3>Comunicação</h3>
+            <input type="text" id="serverMessage" placeholder="Digite uma mensagem">
+            <button id="serverSendBtn">Enviar</button>
+            <div id="server-console" class="console"><b>Console do Servidor:</b><br></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Cliente (Entra na Partida)</h2>
+        <div id="client-join-section">
+            <h3>1. Cole a Oferta do Servidor aqui:</h3>
+            <textarea id="offerSdpInput"></textarea>
+            <button id="createAnswerBtn">Entrar na Partida (Cliente)</button>
+        </div>
+
+        <div id="client-answer-section" class="hidden">
+            <h3>2. Envie esta Resposta para o Servidor:</h3>
+            <textarea id="answerSdpOutput" readonly></textarea>
+        </div>
+
+        <div class="communication-section hidden">
+            <h3>Comunicação</h3>
+            <input type="text" id="clientMessage" placeholder="Digite uma mensagem">
+            <button id="clientSendBtn">Enviar</button>
+            <div id="client-console" class="console"><b>Console do Cliente:</b><br></div>
+        </div>
+    </div>
+
+    <script>
+        let localConnection;
+        let remoteConnection;
+        let sendChannel;
+        let receiveChannel;
+
+        // Elementos do DOM
+        const createServerBtn = document.getElementById('createServerBtn');
+        const offerSdp = document.getElementById('offerSdp');
+        const answerSdp = document.getElementById('answerSdp');
+        const connectServerBtn = document.getElementById('connectServerBtn');
+        const createAnswerBtn = document.getElementById('createAnswerBtn');
+        const offerSdpInput = document.getElementById('offerSdpInput');
+        const answerSdpOutput = document.getElementById('answerSdpOutput');
+        const serverConsole = document.getElementById('server-console');
+        const clientConsole = document.getElementById('client-console');
+
+        function logToConsole(message, side) {
+            const consoleElement = side === 'server' ? serverConsole : clientConsole;
+            consoleElement.innerHTML += message + '<br>';
+            consoleElement.scrollTop = consoleElement.scrollHeight;
+        }
+
+        createServerBtn.onclick = async () => {
+            logToConsole('Iniciando o servidor...', 'server');
+            createServerBtn.disabled = true;
+
+            const servers = null; // Usando STUN/TURN servers gratuitos poderia ajudar em redes mais restritivas
+            localConnection = new RTCPeerConnection(servers);
+            logToConsole('Peer Connection (local) criado.', 'server');
+
+            sendChannel = localConnection.createDataChannel('sendDataChannel');
+            logToConsole('Data Channel criado.', 'server');
+
+            localConnection.onicecandidate = e => {
+                if (e.candidate) {
+                    logToConsole('Novo ICE candidate (local) gerado. Copie e envie para o cliente.', 'server');
+                    offerSdp.value = JSON.stringify(localConnection.localDescription);
+                }
+            };
+            sendChannel.onopen = () => logToConsole('Canal de dados ABERTO!', 'server');
+            sendChannel.onclose = () => logToConsole('Canal de dados FECHADO!', 'server');
+            sendChannel.onmessage = (e) => logToConsole(`Cliente diz: ${e.data}`, 'server');
+
+
+            const offer = await localConnection.createOffer();
+            await localConnection.setLocalDescription(offer);
+            logToConsole('Oferta SDP criada e definida como descrição local.', 'server');
+
+            offerSdp.value = JSON.stringify(localConnection.localDescription);
+            document.getElementById('server-offer-section').classList.remove('hidden');
+            document.getElementById('server-answer-section').classList.remove('hidden');
+            document.querySelector('#server-container .communication-section').classList.remove('hidden');
+
+        };
+
+        connectServerBtn.onclick = async () => {
+            const answer = JSON.parse(answerSdp.value);
+            logToConsole('Resposta do cliente recebida.', 'server');
+            await localConnection.setRemoteDescription(answer);
+            logToConsole('Descrição remota (resposta do cliente) definida.', 'server');
+        };
+
+        createAnswerBtn.onclick = async () => {
+            logToConsole('Iniciando o cliente...', 'client');
+            createAnswerBtn.disabled = true;
+
+            const servers = null;
+            remoteConnection = new RTCPeerConnection(servers);
+            logToConsole('Peer Connection (remoto) criado.', 'client');
+
+            remoteConnection.onicecandidate = e => {
+                 if (e.candidate) {
+                    logToConsole('Novo ICE candidate (remoto) gerado. Copie e envie para o servidor.', 'client');
+                    answerSdpOutput.value = JSON.stringify(remoteConnection.localDescription);
+                }
+            };
+
+            remoteConnection.ondatachannel = e => {
+                receiveChannel = e.channel;
+                receiveChannel.onmessage = (event) => logToConsole(`Servidor diz: ${event.data}`, 'client');
+                receiveChannel.onopen = () => logToConsole('Canal de dados ABERTO!', 'client');
+                receiveChannel.onclose = () => logToConsole('Canal de dados FECHADO!', 'client');
+                logToConsole('Canal de dados recebido.', 'client');
+            };
+
+            const offer = JSON.parse(offerSdpInput.value);
+            logToConsole('Oferta do servidor recebida.', 'client');
+            await remoteConnection.setRemoteDescription(offer);
+            logToConsole('Descrição remota (oferta do servidor) definida.', 'client');
+
+            const answer = await remoteConnection.createAnswer();
+            await remoteConnection.setLocalDescription(answer);
+            logToConsole('Resposta SDP criada e definida como descrição local.', 'client');
+
+            answerSdpOutput.value = JSON.stringify(remoteConnection.localDescription);
+            document.getElementById('client-join-section').classList.add('hidden');
+            document.getElementById('client-answer-section').classList.remove('hidden');
+            document.querySelector('#client-container .communication-section').classList.remove('hidden');
+        };
+
+        // Envio de mensagens
+        document.getElementById('serverSendBtn').onclick = () => {
+            const message = document.getElementById('serverMessage').value;
+            sendChannel.send(message);
+            logToConsole(`Você diz: ${message}`, 'server');
+            document.getElementById('serverMessage').value = '';
+        };
+
+        document.getElementById('clientSendBtn').onclick = () => {
+            const message = document.getElementById('clientMessage').value;
+            receiveChannel.send(message);
+            logToConsole(`Você diz: ${message}`, 'client');
+            document.getElementById('clientMessage').value = '';
+        };
+
+    </script>
+</body>
+</html>
