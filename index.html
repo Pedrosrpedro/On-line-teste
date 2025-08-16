@@ -3,14 +3,19 @@
 <head>
     <title>Demo com PeerJS</title>
     <style> canvas { background-color: #f0f0f0; border: 1px solid black; } </style>
-    <!-- Importa a biblioteca PeerJS -->
+    
+    <!-- ESSA LINHA É A MAIS IMPORTANTE E PRECISA ESTAR AQUI -->
+    <!-- Ela carrega a biblioteca do PeerJS da internet -->
     <script src="https://unpkg.com/peerjs@1.3.1/dist/peer.min.js"></script>
+
 </head>
 <body>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <p>Seu ID: <strong id="my-id">...</strong></p>
     <input type="text" id="other-id" placeholder="ID do amigo">
     <button id="connect-btn">Conectar</button>
+
+    <!-- O SEU SCRIPT DEVE VIR DEPOIS DA BIBLIOTECA -->
     <script src="game.js"></script>
 </body>
 </html>
